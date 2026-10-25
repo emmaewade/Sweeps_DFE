@@ -4,7 +4,7 @@
   202610     single sweep        (dadi_analysis[_folded])
   recurrent  recurrent sweeps    (dadi_analysis_recurrent[_folded])
 
-Per fit: gamma shape, mean |s|, Na and the five |s| bins (Lin et al. 2026 Fig 1D edges).
+Per fit: gamma shape, mean |s|, Na and the five |s| bins.
 
 Writes working-data/202610/comparisons/dfe_by_fit.csv
 Usage (dadi_env):  python compare_dfe_single_recurrent_202610.py
