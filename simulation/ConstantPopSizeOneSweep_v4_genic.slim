@@ -1,0 +1,435 @@
+// set up a simple neutral simulation
+initialize() {
+
+	//For SLIMGUI testing -- uncomment this whole block to test locally,
+	//and comment it back out for cluster runs (where these are passed via -d)
+	//defineConstant("run_name_output", "Test");
+	//defineConstant("BEN_S", 0); //really high for testing 
+	//defineConstant("MU", 1.5e-8);
+	//defineConstant("RECOM_RATE", 1e-8);
+	//defineConstant("PATH", "/Users/emmaewade/Downloads/");
+	//defineConstant("TEMPDIR", "/Users/emmaewade/Downloads/");
+	//total sequence length. Given this length, we expect 1.5 muts per individual per generation.
+	//defineConstant("SEQLENGTH", 10000000);
+	//defineConstant("FIXED_GENS", 100); //only used when BEN_S == 0
+	//defineConstant("segment", 1); //segment number within this replicate, used for naming
+	// DFE for m2 (deleterious) -- e.g. human (Kim 2017): mean=-0.01314833, shape=0.186
+	// or drosophila: mean=-0.00014, shape=0.36
+	//defineConstant("DFE_MEAN", -0.01314833);
+	//defineConstant("DFE_SHAPE", 0.186);
+	
+	// NAME_APPEND is always derived from run_name_output (whether run_name_output
+	// came from the GUI-testing block above or from -d on the command line).
+	// This line must stay ACTIVE (not commented) in both cases.
+	defineConstant("NAME_APPEND", run_name_output);
+	
+	// things I need to add for sweep model
+	// All S are neutral
+	// NS pulled from gamma
+	// 1.5ish MB segments
+	// Beneficial mutation in middle of segment, start with s = 0.01, conditional on fixation (complete hard sweep)
+	// Stop once mutation reaches fixation (unless BEN_S == 0, in which case run for FIXED_GENS generations instead)
+	
+	//debugging
+	print(PATH);
+	print(NAME_APPEND);
+	print(paste("DFE_MEAN=", DFE_MEAN, " DFE_SHAPE=", DFE_SHAPE, sep = ""));
+	
+	// set the mutation rate
+	initializeMutationRate(MU);
+	
+	//m1 mutation type: neutral	
+	initializeMutationType("m1", 0.5, "f", 0.0);
+	
+	//m2 mutation type: deleterious -- DFE (mean, shape) passed in as arguments so we can
+	//swap between e.g. the human (Kim 2017) and drosophila DFEs without editing this script
+	initializeMutationType("m2", 0.5, "g", DFE_MEAN, DFE_SHAPE);
+	
+	//m3 mutation type: beneficial (fixed effect BEN_S, set to 0 for the neutral scenario)
+	initializeMutationType("m3", 0.5, "f", BEN_S);
+	
+	//set ratio of NS:SYN as 2.31:1 -- not including m3 here
+	initializeGenomicElementType("g1", c(m1, m2), c(30.2, 69.8)); //exon
+	initializeGenomicElementType("g3", m1, 1); // intron
+
+	// Generate random genes along the chromosome.
+	// 202610 change: intergenic stretches are kept as physical distance (so the
+	// gene layout and recombination map are the same as v3) but are NOT
+	// initialized as genomic elements, so no mutations arise there. The syn SFS
+	// is therefore built from genic m1 only (exonic synonymous + intronic), and
+	// the nonsyn SFS from exonic m2.
+	base = 0;
+	nc_length_total = 0;
+	in_length_total = 0;
+	ex_length_total = 0;
+	ex_starts = integer(0); ex_ends = integer(0);
+	in_starts = integer(0); in_ends = integer(0);
+	while (base < SEQLENGTH) {
+		// intergenic gap (no genomic element -> no mutations)
+		nc_length = asInteger(runif(1, 500, 50000));
+		nc_length_total = nc_length_total + nc_length;
+		base = base + nc_length;
+
+		// make first exon
+		ex_length = asInteger(rlnorm(1, log(50), log(2))) + 1; ex_length_total = ex_length_total + ex_length;
+		initializeGenomicElement(g1, base, base + ex_length - 1);
+		ex_starts = c(ex_starts, base); ex_ends = c(ex_ends, base + ex_length - 1);
+		base = base + ex_length;
+
+		// make additional intron-exon pairs
+		do {
+			in_length = asInteger(rlnorm(1, log(100), log(1.5))) + 10; in_length_total = in_length_total + in_length;
+			initializeGenomicElement(g3, base, base + in_length - 1);
+			in_starts = c(in_starts, base); in_ends = c(in_ends, base + in_length - 1);
+			base = base + in_length;
+			ex_length = asInteger(rlnorm(1, log(50), log(2))) + 1; ex_length_total = ex_length_total + ex_length;
+			initializeGenomicElement(g1, base, base + ex_length - 1);
+			ex_starts = c(ex_starts, base); ex_ends = c(ex_ends, base + ex_length - 1);
+			base = base + ex_length;
+		} while (runif(1) < 0.8);
+
+	}
+	// (v3's final non-coding element is dropped: the chromosome now ends at the
+	// last exon, which is always at or past SEQLENGTH - 1.)
+
+	// save the exon/intron/intergenic totals as constants for the CSV summary.
+	// NOTE: v3 wrote "noncoding_bp" = introns + intergenic in column 9; v4 writes
+	// intron_bp there (the only mutable noncoding sequence) and intergenic_bp as
+	// an extra column, so L_syn = coding_bp * 0.302 + intron_bp.
+	defineConstant("EX_TOTAL", ex_length_total);
+	defineConstant("IN_TOTAL", in_length_total);
+	defineConstant("IG_TOTAL", nc_length_total);
+	defineConstant("EX_STARTS", ex_starts); defineConstant("EX_ENDS", ex_ends);
+	defineConstant("IN_STARTS", in_starts); defineConstant("IN_ENDS", in_ends);
+	
+	// half-width (bp) of the window around the sweep site used for calcHeterozygosity() --
+	// change this if you want a wider/narrower window
+	defineConstant("HET_WINDOW", 1000000);
+	
+	// windowed-SFS analysis parameters: half-widths (bp) of the symmetric windows around the
+	// sweep site, and the haploid sample sizes to draw for each window. For each sample size
+	// we draw one sample of haplosomes, then compute a separate SFS within each of these
+	// windows from that same sample -- so windows are cumulative/growing (±1, ±2, ... Mb),
+	// not disjoint rings. With SEQLENGTH=10 Mb and the sweep at the center, the ±5 Mb window
+	// spans the whole chromosome.
+	defineConstant("DISTANCES", c(1000000, 2000000, 3000000, 4000000, 5000000));
+	defineConstant("SAMPLE_SIZES", c(10, 100, 1000));
+	// sample size whose haplosomes are also written to VCF (pre- and post-sweep)
+	defineConstant("VCF_N", 100);
+	
+	// uniform recombination along the chromosome
+	initializeRecombinationRate(RECOM_RATE);
+}
+
+// create a population of 10000 individuals
+1 early() {
+	// save this run's identifier, used to save and restore if beneficial mutation is lost
+	defineConstant("simID", getSeed());
+	sim.addSubpop("p1", 10000);
+}
+
+// constant population size
+100000 late() {    //100000 = p1 size * 10  // add ben mutation with late() bc analogous to de novo germline mutation in offspring
+	
+	// Meaningful, collision-safe temp filename: includes the replicate name (NAME_APPEND)
+	// and segment number so you can tell which run a leftover temp file belongs to just
+	// by looking at it, plus simID to guarantee uniqueness across concurrently-running tasks
+	// (since all 22 segments of a replicate share the same NAME_APPEND).
+	defineConstant("TEMP_FILE", paste(TEMPDIR, paste("slim_", NAME_APPEND, "_seg", segment, "_", simID, ".txt", sep = ""), sep = "/"));
+	
+	// track how many times we've attempted this sweep (starts at 1, incremented on each restart)
+	defineGlobal("N_ATTEMPTS", 1);
+	
+	// generation at which the tracked mutation was introduced -- used later to report
+	// how many generations the post-introduction phase actually ran for
+	defineConstant("INTRO_GEN", sim.cycle);
+	
+	// save the state of the simulation
+	sim.outputFull(TEMP_FILE);
+	
+	// pre-sweep snapshot (same windows/sample sizes as the end-of-run SFS, plus the
+	// n = VCF_N VCF), taken before the tracked mutation exists. Not repeated on restart:
+	// a restart reloads this same population state, and this event does not re-run.
+	writeWindowedSFS("pre_");
+	
+	target = sample(p1.haplosomes, 1);
+	defineGlobal("BACKGROUND", target.mutations);
+	defineGlobal("BG_FREQ0", sim.mutationFrequencies(p1, BACKGROUND));
+	// m3 has a fixed ("f") DFE equal to BEN_S, so addNewDrawnMutation() drawing from
+	// m3 already gives selectionCoeff == BEN_S exactly (confirmed against the SLiM manual --
+	// addNewDrawnMutation() has no selectionCoeff argument; only addNewMutation() does).
+	// When BEN_S == 0 this introduces a truly neutral tracked mutation.
+	mut = target.addNewDrawnMutation(m3, asInteger(SEQLENGTH/2));
+	defineGlobal("SWEEP", mut);
+	
+	// generation at which the neutral (BEN_S == 0) scenario should stop, regardless
+	// of whether SWEEP is still segregating, fixed, or lost
+	defineConstant("STOP_GEN", sim.cycle + FIXED_GENS);
+}
+
+// print status
+1:1000000 late() {
+	
+	if (sim.cycle % 5000 == 0) { print(sim.cycle); }
+
+}
+
+// Writes the header line of a per-replicate file shared by all 22 segments, exactly once.
+// The 22 segments of a replicate can finish within seconds of each other, and the old
+// "if (!fileExists) writeFile(header, append = F)" let a second segment truncate rows a
+// first one had just appended. Here an atomic shell mkdir picks one writer, and every
+// write appends, so no row can be lost. The header may then not be the first line --
+// readers should skip lines whose first field is "segment" rather than line 1.
+function (void)writeHeaderOnce(string$ path, string$ header)
+{
+	if (fileExists(path + ".hdrlock")) return;
+	got = system("mkdir '" + path + ".hdrlock' 2>/dev/null && echo got");
+	if (size(got) > 0) if (got == "got") writeFile(path, header, append = T);
+}
+
+// Writes one row to this replicate's CSV summary file (shared across all 22 segments,
+// since the filename is built from NAME_APPEND, not segment). Creates the file with a
+// header the first time it's written for this replicate.
+function (void)writeSummaryCSV(float hetRegion)
+{
+	csv_path = paste(PATH, paste("summary_", NAME_APPEND, ".csv", sep = ""), sep = "/");
+	
+	{
+		header = "segment,ben_s,dfe_mean,dfe_shape,total_generations,generations_since_intro,sweep_attempts,coding_bp,intron_bp,het_window_bp,mean_het_region,intergenic_bp";
+		writeHeaderOnce(csv_path, header);
+	}
+	
+	row = paste(segment, BEN_S, DFE_MEAN, DFE_SHAPE, sim.cycle, sim.cycle - INTRO_GEN, N_ATTEMPTS, EX_TOTAL, IN_TOTAL, HET_WINDOW, hetRegion, IG_TOTAL, sep = ",");
+	writeFile(csv_path, row, append = T);
+}
+
+// Hitchhiker accounting: one row per mutation that was on the haplosome receiving the
+// tracked (sweep or neutral) mutation at introduction (BACKGROUND), with its frequency
+// then (BG_FREQ0) and its fate at the end of the run. Written to
+// hitchhikers_<run>.tsv, shared across segments (like the summary CSV).
+function (void)writeHitchhikers(void)
+{
+	out_path = paste(PATH, paste("hitchhikers_", NAME_APPEND, ".tsv", sep = ""), sep = "/");
+	writeHeaderOnce(out_path, "segment\tmut_id\tmut_type\tposition\ts\torigin_tick\tfreq_at_intro\tstatus_at_end\tfreq_at_end");
+	if (size(BACKGROUND) == 0)
+		return;
+	
+	freq_end = float(size(BACKGROUND));
+	status = rep("lost", size(BACKGROUND));
+	seg = BACKGROUND.isSegregating;
+	if (any(seg))
+	{
+		freq_end[seg] = sim.mutationFrequencies(p1, BACKGROUND[seg]);
+		status[seg] = "segregating";
+	}
+	fix = !seg & BACKGROUND.isFixed;
+	freq_end[fix] = 1.0;
+	status[fix] = "fixed";
+	
+	rows = string(0);
+	for (i in seqAlong(BACKGROUND))
+	{
+		m = BACKGROUND[i];
+		rows = c(rows, paste(segment, m.id, m.mutationType.id, m.position, m.selectionCoeff, m.originTick, BG_FREQ0[i], status[i], freq_end[i], sep = "\t"));
+	}
+	writeFile(out_path, rows, append = T);
+}
+
+// bp of the elements [starts, ends] that fall inside [win_start, win_end]
+function (integer$)overlapBP(integer starts, integer ends, integer$ win_start, integer$ win_end)
+{
+	lo = pmax(starts, win_start);
+	hi = pmin(ends, win_end);
+	keep = hi >= lo;
+	if (sum(keep) == 0) return 0;
+	return asInteger(sum(hi[keep] - lo[keep] + 1));
+}
+
+// Writes the exact exonic and intronic bp inside each DISTANCES window for this
+// segment to genic_bp_<run>.csv (one row per segment x window), so the fitting
+// step can compute L_syn and the nonsyn/syn target ratio per window instead of
+// scaling the chromosome totals by window width.
+function (void)writeWindowBP(void)
+{
+	csv_path = paste(PATH, paste("genic_bp_", NAME_APPEND, ".csv", sep = ""), sep = "/");
+	writeHeaderOnce(csv_path, "segment,dist_mb,exon_bp,intron_bp");
+	center = asInteger(SEQLENGTH / 2);
+	for (dist in DISTANCES)
+	{
+		win_start = asInteger(max(0, center - dist));
+		win_end = asInteger(min(SEQLENGTH - 1, center + dist));
+		row = paste(segment, asInteger(dist / 1000000), overlapBP(EX_STARTS, EX_ENDS, win_start, win_end), overlapBP(IN_STARTS, IN_ENDS, win_start, win_end), sep = ",");
+		writeFile(csv_path, row, append = T);
+	}
+}
+
+// Writes windowed SFS files (synonymous m1, nonsynonymous m2) across the SAMPLE_SIZES x
+// DISTANCES grid, centered on the sweep site. Called once the simulation reaches its
+// stopping condition (STOP_GEN for neutral runs, fixation for sweep runs). For each sample
+// size we draw ONE sample of haplosomes, then compute a separate SFS within each distance
+// window from that same sample (so windows are cumulative, ±1 Mb through ±5 Mb, not
+// disjoint rings -- see the DISTANCES comment in initialize()).
+// Filenames encode sample size ("n<sample_size>") and window half-width in Mb ("d<dist>mb"),
+// e.g. syn_sfs_<run>_n100_d3mb.tsv, so segments/replicates can be concatenated downstream
+// by (sample_size, distance) bin.
+// prefix: "" for the end-of-run SFS (the files the fits read), "pre_" for the pre-sweep
+// snapshot taken when the tracked mutation is introduced (pre_syn_sfs_<run>_...).
+// The n = VCF_N sample is also written as a per-segment VCF (whole chromosome, all
+// mutation types; INFO carries MT, S and TO = origin tick):
+//   vcf_<run>_seg<segment>_<pre|post>.vcf   (gzipped by the submit script)
+function (void)writeWindowedSFS(string$ prefix)
+{
+	center = asInteger(SEQLENGTH / 2);
+	
+	for (sample_size in SAMPLE_SIZES)
+	{
+		sampledHaploidGenomes = sample(p1.haplosomes, sample_size);
+		
+		if (sample_size == VCF_N)
+		{
+			vcf_tag = (prefix == "pre_") ? "pre" else "post";
+			vcf_path = paste(PATH, paste("vcf_", NAME_APPEND, "_seg", segment, "_", vcf_tag, ".vcf", sep = ""), sep = "/");
+			sampledHaploidGenomes.outputHaplosomesToVCF(vcf_path);
+		}
+		
+		for (dist in DISTANCES)
+		{
+			win_start = max(0, center - dist);
+			win_end = min(SEQLENGTH - 1, center + dist);
+			
+			m1MutationsInSample = unique(sampledHaploidGenomes.mutationsOfType(m1));
+			m1MutationsInSample = m1MutationsInSample[m1MutationsInSample.position >= win_start & m1MutationsInSample.position <= win_end];
+			m1counts = sampledHaploidGenomes.mutationCountsInHaplosomes(mutations = m1MutationsInSample);
+			
+			m2MutationsInSample = unique(sampledHaploidGenomes.mutationsOfType(m2));
+			m2MutationsInSample = m2MutationsInSample[m2MutationsInSample.position >= win_start & m2MutationsInSample.position <= win_end];
+			m2counts = sampledHaploidGenomes.mutationCountsInHaplosomes(mutations = m2MutationsInSample);
+			
+			m1_sfs = c();
+			m2_sfs = c();
+			
+			for (i in seq(1, sample_size))
+			{
+				count = sum(m1counts == i);
+				m1_sfs = c(m1_sfs, count);
+				
+				count = sum(m2counts == i);
+				m2_sfs = c(m2_sfs, count);
+			}
+			
+			dist_mb = asInteger(dist / 1000000);
+			
+			//sfs for synonymous
+			neu_to_print = paste(asString(m1_sfs), sep = "	");
+			towrite = paste(prefix, "syn_sfs_", NAME_APPEND, "_n", sample_size, "_d", dist_mb, "mb", ".tsv", sep = "");
+			fullpath = paste(PATH, towrite, sep = "/");
+			writeFile(fullpath, neu_to_print, append = T);
+			
+			//sfs for nonsynonymous
+			del_to_print = paste(asString(m2_sfs), sep = "	");
+			towrite = paste(prefix, "nonsyn_sfs_", NAME_APPEND, "_n", sample_size, "_d", dist_mb, "mb", ".tsv", sep = "");
+			fullpath = paste(PATH, towrite, sep = "/");
+			writeFile(fullpath, del_to_print, append = T);
+		}
+	}
+	
+	print(paste("printed windowed SFS", prefix));
+}
+
+100000:1000000 late() {
+	
+	// ----- NEUTRAL SCENARIO: run for a fixed number of generations -----
+	if (BEN_S == 0)
+	{
+		if (sim.cycle == STOP_GEN)
+		{
+			print(sim.cycle);
+			
+			//////// sanity check background mutations (same categorization as sweep branch,
+			//////// so neutral and sweep runs produce identically-named/structured output)
+			nonSeg = BACKGROUND[!BACKGROUND.isSegregating];
+			fixed = nonSeg[nonSeg.isFixed];
+			lost = nonSeg[!nonSeg.isFixed];
+			writeFile(paste(PATH, paste("fixed_", NAME_APPEND, ".txt", sep = ""), sep = "/"), paste(fixed.position, sep=", "), append=T);
+			writeFile(paste(PATH, paste("lost_", NAME_APPEND, ".txt", sep = ""), sep = "/"), paste(lost.position, sep=", "), append=T);
+			
+			////////////////////////////////////// windowed SFS across SAMPLE_SIZES x DISTANCES
+			writeWindowedSFS("");
+			writeWindowBP();
+			writeHitchhikers();
+			
+			// mean heterozygosity in the region around the (neutral) tracked mutation
+			win_start = max(0, asInteger(SEQLENGTH / 2) - HET_WINDOW);
+			win_end = min(SEQLENGTH - 1, asInteger(SEQLENGTH / 2) + HET_WINDOW);
+			het_region = calcHeterozygosity(p1.haplosomes, start = win_start, end = win_end);
+			
+			writeSummaryCSV(het_region);
+			
+			// clean up this run's restart-state file -- no longer needed once finished
+			deleteFile(TEMP_FILE);
+			
+			sim.simulationFinished();
+		}
+		// if not yet at STOP_GEN, do nothing this cycle -- just let the sim continue
+		// (no restart-on-loss here, since a neutral run doesn't need fixation conditioning)
+	}
+	// ----- SWEEP SCENARIO: run until fixation (original behavior) -----
+	else if (!SWEEP.isSegregating)
+	{
+		if(SWEEP.isFixed)
+		{
+			print(sim.cycle);
+			//////// sanity check sweep 
+			nonSeg = BACKGROUND[!BACKGROUND.isSegregating];
+			fixed = nonSeg[nonSeg.isFixed];
+			lost = nonSeg[!nonSeg.isFixed];
+			writeFile(paste(PATH, paste("fixed_", NAME_APPEND, ".txt", sep = ""), sep = "/"), paste(fixed.position, sep=", "), append=T);
+			writeFile(paste(PATH, paste("lost_", NAME_APPEND, ".txt", sep = ""), sep = "/"), paste(lost.position, sep=", "), append=T);
+			
+			////////////////////////////////////// windowed SFS across SAMPLE_SIZES x DISTANCES
+			writeWindowedSFS("");
+			writeWindowBP();
+			writeHitchhikers();
+			
+			// mean heterozygosity in the region around the fixed sweep mutation
+			win_start = max(0, asInteger(SEQLENGTH / 2) - HET_WINDOW);
+			win_end = min(SEQLENGTH - 1, asInteger(SEQLENGTH / 2) + HET_WINDOW);
+			het_region = calcHeterozygosity(p1.haplosomes, start = win_start, end = win_end);
+			
+			writeSummaryCSV(het_region);
+			
+			// clean up this run's restart-state file -- no longer needed once finished
+			deleteFile(TEMP_FILE);
+			
+			//////////////////////////
+			sim.simulationFinished();
+		
+		}
+		else // has been lost, restart from after burn in with new seed
+		{
+			cat(simID + ": LOST – RESTARTING\n");
+			print(SWEEP.isSegregating); // should be false, 
+			
+			// count this restart attempt
+			defineGlobal("N_ATTEMPTS", N_ATTEMPTS + 1);
+			
+			// go back to tick 1000
+			sim.readFromPopulationFile(TEMP_FILE);
+			// start a newly seeded run
+			setSeed(rdunif(1, 0, asInteger(2^62) - 1));
+			
+			// re-introduce the sweep and background mutations
+			//rm(BACKGROUND);
+			//rm(SWEEP);
+			target = sample(p1.haplosomes, 1);
+			defineGlobal("BACKGROUND", target.mutations);
+			defineGlobal("BG_FREQ0", sim.mutationFrequencies(p1, BACKGROUND));
+			mut = target.addNewDrawnMutation(m3, asInteger(SEQLENGTH/2));
+			defineGlobal("SWEEP", mut);
+			print(SWEEP.isSegregating); // should be true, testing if global variable redefined correctly
+		
+		}
+	
+	}
+
+}
