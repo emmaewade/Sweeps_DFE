@@ -9,13 +9,12 @@
 #$ -t 1-240
 
 # Constant-size (one_epoch, dadi snm) demography fit on the syn SFS of the
-# single-sweep neutral controls. Demography only -- no fitdadi DFE step.
+# single-sweep neutral controls.
 # Same SFS conversion, L_syn and dadi settings as fit_demo_dfe_human_202610.sh.
 # Folded runs: qsub -v FOLD_MODE=fold -N dadi202610_1ep_fold \
 #   -o '/u/scratch/e/eewade/logs/dadi202610_1ep_fold.$TASK_ID.txt' fit_demo_one_epoch_neutral_202610.sh
 #
 # Output: data/working-data/202610/dadi_analysis[_folded]/<run_name>/n<n>_d<d>mb/one_epoch/demography/
-# A task whose one_epoch_demography.txt already has "Best fit parameters:" is skipped.
 
 . /u/local/Modules/default/init/modules.sh
 module load anaconda3
