@@ -1,24 +1,6 @@
 // Recurrent Selection Script -- 202610 genic-only version
-// structure inspired by Soni V, Johri P, Jensen JD. Evaluating power to detect recurrent selective sweeps under increasingly realistic
-// evolutionary null models. Evolution. 2023 Oct 3;77(10):2113-2127. doi: 10.1093/evolut/qpad120. PMID: 37395482; PMCID: PMC10547124.
 //
-// Changes vs daily/202609/sweeps/RecurrentSweep_09Updates.slim, matching
-// daily/202610/sweeps/ConstantPopSizeOneSweep_v4_genic.slim:
 //  - 10 Mb chromosome (SEQLENGTH default)
-//  - intergenic stretches keep their physical length but are NOT genomic
-//    elements -> no intergenic mutations. Syn SFS = genic m1 (exonic synonymous
-//    + intronic); nonsyn SFS = exonic m2 + m3.
-//  - DFE for m2 passed in as DFE_MEAN / DFE_SHAPE (human Kim 2017 default)
-//  - SFS at SAMPLE_SIZES (10, 100, 1000) over the whole 10 Mb chromosome only
-//    (DISTANCES = +/-5 Mb around the center), same filenames as v4
-//    (syn_sfs_<run>_n<n>_d5mb.tsv, nonsyn_sfs_<run>_n<n>_d5mb.tsv) so the
-//    202610 fit pipeline reads them unchanged (set its DISTANCES_MB=(5))
-//  - genic_bp_<run>.csv with exact exon/intron bp per window
-//  - n = VCF_N (100) whole-chromosome VCF at the end of the run
-//  - defaults BEN_S = 0.00032, BEN_FRAC = 0.003125: log10(p*s) = -6.0, the
-//    human best-fit region in Zhen et al. 2021 (Genome Res 31:110), Fig. 4
-// Unlike the single-sweep runs there is no tracked sweep at the center (sweeps
-// land anywhere), so there is no pre-sweep snapshot or hitchhiker file.
 
 initialize() {
 
@@ -145,10 +127,8 @@ initialize() {
 
 		// Track every currently-segregating beneficial mutation: its position,
 		// current frequency, and how many generations old it is. Written as a
-		// long-format CSV (one row per active mutation per logged generation),
-		// so you can later reconstruct how many sweeps were segregating
-		// simultaneously at any point (clonal interference) and how long each
-		// one persisted before fixing or being lost.
+		// long-format CSV (one row per active mutation per logged generation)
+
 		if (n_ben > 0) {
 			freqs = sim.mutationFrequencies(p1, active_m3);
 			csv_path = paste(PATH, paste("active_sweeps_", NAME_APPEND, ".csv", sep = ""), sep = "/");
@@ -238,8 +218,7 @@ function (integer)sfsOf(object<Haplosome> haps, object<Mutation> muts, integer$ 
 // Windowed SFS across SAMPLE_SIZES x DISTANCES. One sample per sample size,
 // SFS computed within each (cumulative) window from that sample. Files:
 //   syn_sfs_<run>_n<n>_d<d>mb.tsv         m1 (exonic syn + intronic)
-//   nonsyn_sfs_<run>_n<n>_d<d>mb.tsv      m2 + m3 (what the fits read: all
-//                                          nonsynonymous variation, as in data)
+//   nonsyn_sfs_<run>_n<n>_d<d>mb.tsv      m2 + m3 
 //   nonsyn_del_sfs_<run>_n<n>_d<d>mb.tsv  m2 only
 //   nonsyn_ben_sfs_<run>_n<n>_d<d>mb.tsv  m3 only
 // The n = VCF_N sample is also written as a whole-chromosome VCF:
