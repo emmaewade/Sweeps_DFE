@@ -4,8 +4,7 @@
 # Supplementary Fig S20: constant size (one-epoch) vs two-epoch demography on the
 # synonymous SFS of the single-sweep neutral controls (no sweep), folded, n = 100,
 # +/- 1 / 3 / 5 Mb. Likelihood-ratio test statistic D = 2 x (LL two - LL one) per
-# replicate, with the chi-square (2 df) critical value at alpha = 0.05, as in S4C
-# (Martinez i Zurita et al. 2025; README_lrt_two_vs_three_epoch.md). The one-epoch
+# replicate, with the chi-square (2 df) critical value at alpha = 0.05. The one-epoch
 # model is the two-epoch model with nu = 1, so a converged two-epoch fit has
 # LL >= one-epoch; rows below that are flagged non-converged and set to D = 0.
 # Theme and palettes copied from make_manuscript_figures_202610.R.
