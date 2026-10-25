@@ -1,29 +1,6 @@
 """
-Uses dadi and fitdadi to infer DFE.
+Uses fitdadi to infer DFE.
 
-JCM 20230308
-
-Modified to additionally:
-    - Write a CSV summary of results for the gamma-distributed DFE fit.
-    - Save the empirical synonymous and nonsynonymous SFS, along with the
-      best-fit model SFS, to disk in dadi's native Spectrum format
-      (``.fs``).
-    - Add a --fold/--no-fold flag. When folding, the input SFSs are folded
-      once at load time, and the model SFS from each optimization start is
-      folded once (outside the optimizer's internal iterations) before its
-      likelihood is computed and compared across starts.
-    - [202609 Poisson test] Added --likelihood (poisson default | multinom),
-      --ns_s_ratio (theta_nonsyn / theta_syn, required; replaces the hardcoded
-      empirical-human 2.21), --pts (fixed dadi grid, default 1200 1600 2000,
-      replacing n*3/n*4/n*5), and --cpus for building the selection cache.
-    - [202609 Poisson test] Each gamma start is now perturbed (p0 was
-      computed but never passed to the optimizer), and the gamma fit is
-      bounded by --shape_bounds / --scale_bounds.
-      With --likelihood poisson the model SFS is NOT rescaled to the data, so
-      the total nonsynonymous SNP count informs the DFE (fitdadi default,
-      as in Kim et al. 2017 and Wade et al. 2023).
-    - The neutral+gamma DFE inference is commented out. Uncomment the
-      blocks marked ``NEUGAMMA`` to restore it.
 """
 
 
