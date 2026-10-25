@@ -1,6 +1,6 @@
 # sweeps-dfe
 
-Scripts for "Robustness of the inference of the distribution of fitness effects to selective sweep" Wade & Lohmueller (2026)
+Scripts for  Wade EE, Lohmueller KE. Robustness of the inference of the distribution of fitness effects to selective sweep. *BioRxiv*. (2026)
 
 1. `simulation/`: SLiM single-sweep (`ConstantPopSizeOneSweep_v4_genic.slim`) and recurrent-sweep
    (`RecurrentSweep_v2_genic.slim`) arrays; the task-argument files list every simulated condition
