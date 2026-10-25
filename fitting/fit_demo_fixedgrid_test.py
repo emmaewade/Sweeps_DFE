@@ -1,28 +1,4 @@
-""" Uses dadi to infer the best-fit demographic model for given sfs.
-
-JCM 20231212
-
-Modified to additionally:
-    - Write a CSV summary of results across all fitted models.
-    - Save the empirical synonymous SFS and the best-fit model SFS
-      (both non-scaled and scaled by theta) to disk in dadi's native
-      Spectrum format (``.fs``), so they can be reloaded downstream
-      (e.g., by ``fitdadi_infer_DFE.py``) without recomputation.
-    - Add a --fold/--no-fold flag. When folding, the input SFS is folded
-      once at load time, and each candidate model spectrum is folded
-      before its likelihood is computed against the (matching) folded
-      empirical data.
-    - Comment out contraction (nu < 1) starting points for the two_epoch
-      and three_epoch models, leaving only stasis/growth starts.
-    - Size each model's optimization loop to the length of its own
-      initial_guesses list, rather than a hardcoded number of starts.
-
-[202609 fixed-grid test] Copy of 202608/sweeps/fit_demo_jon_output_improved.py
-with a --pts option (default 1200 1600 2000) replacing the n*2/n*3/n*4 grid,
-and --nu_bounds / --T_bounds (defaults [0.01, open] / [1e-5, 10]) on the
-two_epoch and three_epoch optimizations (previously unbounded).
-"""
-
+# Uses dadi to infer the best-fit demographic model for given sfs.
 
 import sys
 import os
