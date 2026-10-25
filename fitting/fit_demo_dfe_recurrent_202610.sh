@@ -12,46 +12,8 @@
 # Recurrent-sweep version (RecurrentSweep_v2_genic.slim): identical fitting to
 # fit_demo_dfe_human_202610.sh, but the recurrent sims write SFS only for the
 # whole 10 Mb chromosome (+/-5 Mb), so DISTANCES_MB=(5). The nonsyn SFS is m2 + m3
-# (deleterious + beneficial), as an empirical analysis would see it.
-# Queued per replicate by dispatch_fits_recurrent_202610.sh (RUN_NAME, -t 1-4).
-#
-# 202610 version: same dadi (demography) -> fitdadi (DFE) fits as
-# daily/202609/sweeps/fit_demo_dfe_fixed_human.sh, applied to the genic-only
-# resimulation (ConstantPopSizeOneSweep_v4_genic.slim: no intergenic
-# mutations), with windows +/-1, 3, 5 Mb instead of 1, 2, 3 Mb. L_syn and
-# ns_s_ratio come from the exact per-window exon/intron bp in
-# genic_bp_<run>.csv rather than scaling chromosome totals by window width.
-# No Syn-SFS conditioned fits in this round.
-#
-# Notes carried over from the 202609 rerun:
-# Full rerun of the 202609 single-sweep pipeline, human DFE only, with the
-# fitting fixes established by the neutral-control tests:
-#   demography (fit_demo_fixedgrid_test.py)
-#     - fixed dadi grid 1200/1600/2000 (was n*2/n*3/n*4)
-#     - bounds nu in [0.01, 100], T >= 1e-5 with no upper bound (was
-#       unbounded; unbounded starts could hang for hours on the fine grid).
-#       T's upper bound stays open on purpose: with every parameter bounded
-#       on both sides, L-BFGS-B takes an unscaled first step and fits end up
-#       on the box edges (see dadi_analysis_fixed_INVALID_boxed_bounds/).
-#     - demography "Best fit parameters" parsed correctly in the DFE step
-#       (the old regex misread scientific notation, e.g. 4.29e+01 -> 4.29)
-#   DFE (fit_dfe_poisson_test.py)
-#     - Poisson likelihood with theta_nonsyn = theta_syn x true nonsyn/syn
-#       mutational-target ratio from the SLiM summary (was multinomial, with a
-#       hardcoded, unused 2.21)
-#     - fixed dadi grid 1200/1600/2000 (was n*3/n*4/n*5)
-#     - perturbed starts and bounded gamma (shape [1e-3, 100], scale [1e-2, 1e6])
-#   unfolded SFS by default. For folded SFS (demography and DFE both folded),
-#   submit with a separate job name and log path so logs don't collide:
-#     qsub -v FOLD_MODE=fold -N dadi202610_fold \
-#          -o '/u/scratch/e/eewade/logs/dadi202610_fold.$TASK_ID.txt' fit_demo_dfe_human_202610.sh
-# Sample sizes 100 and 1000 only (n = 10 needs pooled replicates), windows
-# +/-1, 3, 5 Mb, two_epoch and three_epoch.
-#
-# Output: data/working-data/202610/dadi_analysis/<run_name>/n<n>_d<d>mb/<model>/
-#         (dadi_analysis_folded/ when FOLD_MODE=fold)
-# A task whose dfe/dfe_results.csv already exists is skipped, so the array can
-# be resubmitted to fill in failures.
+# (deleterious + beneficial)
+
 
 . /u/local/Modules/default/init/modules.sh
 module load anaconda3
