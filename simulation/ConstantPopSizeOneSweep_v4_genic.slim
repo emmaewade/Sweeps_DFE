@@ -23,11 +23,9 @@ initialize() {
 	// This line must stay ACTIVE (not commented) in both cases.
 	defineConstant("NAME_APPEND", run_name_output);
 	
-	// things I need to add for sweep model
 	// All S are neutral
 	// NS pulled from gamma
-	// 1.5ish MB segments
-	// Beneficial mutation in middle of segment, start with s = 0.01, conditional on fixation (complete hard sweep)
+	// Beneficial mutation in middle of segment, start with s = 0.01, conditional on fixation
 	// Stop once mutation reaches fixation (unless BEN_S == 0, in which case run for FIXED_GENS generations instead)
 	
 	//debugging
@@ -174,12 +172,8 @@ initialize() {
 
 }
 
-// Writes the header line of a per-replicate file shared by all 22 segments, exactly once.
-// The 22 segments of a replicate can finish within seconds of each other, and the old
-// "if (!fileExists) writeFile(header, append = F)" let a second segment truncate rows a
-// first one had just appended. Here an atomic shell mkdir picks one writer, and every
-// write appends, so no row can be lost. The header may then not be the first line --
-// readers should skip lines whose first field is "segment" rather than line 1.
+// Writes the header line of a per-replicate file shared by all 22 segments
+
 function (void)writeHeaderOnce(string$ path, string$ header)
 {
 	if (fileExists(path + ".hdrlock")) return;
