@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Relative excess of rare variants, 1 - pi/theta_W, for syn and nonsyn SFS (202610).
+"""Relative excess of rare variants, 1 - pi/theta_W, for syn and nonsyn SFS.
 
 Reads the empirical folded SFS used by the dadi fits (n = 100):
   single sweep: dadi_analysis_folded/<run>/n100_d{1,3,5}mb/two_epoch/dfe/empirical_{syn,nonsyn}_sfs.fs
