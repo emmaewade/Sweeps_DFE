@@ -1,8 +1,7 @@
 #!/usr/bin/env Rscript
 # make_manuscript_figures_202610.R
 #
-# Manuscript figures from the 202610 genic-only resimulation (human DFE of
-# Kim et al. 2017 only). Main-text defaults: folded spectra, n = 1000,
+# Manuscript figures. Main-text defaults: folded spectra, n = 1000,
 # d = 5 Mb (whole 10 Mb chromosome), both r, all sweep s.
 #
 #   main/Fig1_syn_sfs_distortion     single sweep: A synonymous delta theta_W
@@ -115,10 +114,7 @@ S_BEN_LAB <- labeller(sweep_s = label_s_ben, cond = label_s_ben, sr = label_s_be
 # ------------------------------------------------------------
 # Theme and palettes
 # ------------------------------------------------------------
-# Same look as the 202609 figures (theme_bw, grey strips, legend at the bottom).
-# Figures are saved at print size (7.2 in = full page width), so these point
-# sizes are what appears on the page (202609: base 10 on 11-13 in canvases,
-# i.e. ~6-7 pt after reduction).
+
 theme_ms <- theme_bw(base_size = 9) +
   theme(panel.grid.minor = element_blank(),
         strip.background = element_rect(fill = "grey92", colour = NA),
